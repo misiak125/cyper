@@ -7,5 +7,7 @@ Run:
 
 
  avaiable flags:
+ 
  -l                         append result to a master file
+ 
  -s [list of stores]        search only selected stores
