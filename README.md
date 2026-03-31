@@ -6,7 +6,7 @@ Run:
 3. python main.py
 
 
- avaiable flags:
+ available flags:
  
  -l                         append result to a master file
  
