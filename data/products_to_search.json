@@ -1,0 +1,9 @@
+[
+    {
+        "id": "R001",
+        "name": "Example",
+        "required_words": ["need", "it"],
+        "quantity": "5L",
+        "exclude_words": ["dont", "need", "it"]
+    }
+]
