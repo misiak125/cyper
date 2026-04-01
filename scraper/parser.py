@@ -16,7 +16,14 @@ def extract_product_data(html: str, shop_config: dict) -> dict:
         
 
     # zebranie ceny
-    price_element = soup.select_one(selectors.get("product_price", ""))
+    price_selectors = selectors.get("product_price", "")
+    
+    price_element = soup.select_one(price_selectors[0])
+    for price_selector in price_selectors:
+        price_element = soup.select_one(price_selector)
+        
+        if price_element: 
+            break
     if price_element:
         price_text = price_element.get_text(strip=True)
         clean_price = parse_price(price_text)
