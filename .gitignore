@@ -205,3 +205,6 @@ src/error_log.txt
 test.py
 
 TODO
+
+config.py
+data/products_to_search.json
