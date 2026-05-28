@@ -2,9 +2,9 @@ from bs4 import BeautifulSoup
 import re
 from scraper.tools import parse_price
 
-#wyciąga informacje z pliku html
-def extract_product_data(html: str, shop_config: dict) -> dict:
 
+def extract_product_data(html: str, shop_config: dict) -> dict:
+    """ wyciąga informacje z HTML """
 
     result = {"price": None, "tax_info": None, "is_available": False}
     
@@ -18,12 +18,14 @@ def extract_product_data(html: str, shop_config: dict) -> dict:
     # zebranie ceny
     price_selectors = selectors.get("product_price", "")
     
-    price_element = soup.select_one(price_selectors[0])
+    price_element = None
     for price_selector in price_selectors:
         price_element = soup.select_one(price_selector)
         
+        
         if price_element: 
             break
+        
     if price_element:
         price_text = price_element.get_text(strip=True)
         clean_price = parse_price(price_text)
@@ -47,22 +49,31 @@ def extract_product_data(html: str, shop_config: dict) -> dict:
         result["tax_info"] = "brutto"
 
     # sprawdzenie dostepnosci
-    if "product_availability" in selectors and "available_string" in selectors:
-        availability_element = soup.select_one(selectors["product_availability"])
-        if availability_element:
-            availability_text = availability_element.get_text(strip=True)
+    if "product_availability" in selectors:
+        if "available_string" in selectors:
+            availability_element = soup.select_one(selectors["product_availability"])
+            if availability_element:
+                availability_text = availability_element.get_text(strip=True)
+                
+                print(availability_text, selectors["available_string"])
+                if selectors["available_string"].lower() in availability_text.lower():
+                    result["is_available"] = True
+                else:
+                    result["is_available"] = False
+                    
+        if "unavailable_string" in selectors:
+            availability_element = soup.select_one(selectors["product_availability"])
+            if availability_element:
+                availability_text = availability_element.get_text(strip=True)
 
-            if selectors["available_string"].lower() in availability_text.lower():
-                result["is_available"] = True
-    elif "product_availability" in selectors and "unavailable_string" in selectors:
-        availability_element = soup.select_one(selectors["product_availability"])
-        if availability_element:
-            availability_text = availability_element.get_text(strip=True)
-
-            if selectors["unavailable_string"].lower() in availability_text.lower():
-                result["is_available"] = False
+                if selectors["unavailable_string"].lower() in availability_text.lower():
+                    result["is_available"] = False
+                else:
+                    result["is_available"] = True
 
     else:
         result["is_available"] = True
 
     return result 
+
+

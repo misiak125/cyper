@@ -2,15 +2,16 @@ import urllib.parse
 from urllib.parse import urlparse
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 from thefuzz import fuzz
-from scraper.tools import generate_quantity_variants
+from scraper.tools import generate_quantity_variants, fake_scroll
 import logging
+import asyncio
 
 
-
-async def find_product_url(page: Page, shop_config: dict, product: dict, max_retries: int = 3) -> str | None:
+async def find_product_url(page: Page, shop_name: int, shop_config: dict, product: dict, max_retries: int = 3) -> str | None:
     """Wchodzi na wyszukiwarkę, filtruje i używa Fuzzy Matchingu do wyboru najlepszego linku."""
     
-    query_encoded = urllib.parse.quote_plus(product["name"])
+    product_name = product["name"]
+    query_encoded = urllib.parse.quote_plus(product_name)
     search_url = shop_config["search_url_template"].format(query_encoded)
     
         
@@ -19,20 +20,21 @@ async def find_product_url(page: Page, shop_config: dict, product: dict, max_ret
     
     for attempt in range(1, max_retries + 1):
         try:
-            logging.info(f"Ładowanie wyszukiwarki (Próba {attempt}/{max_retries}) dla: {product['name']}")
+            logging.info(f"[{shop_name}][{product_name}]Ładowanie wyszukiwarki (Próba {attempt}/{max_retries}) dla: {product['name']}")
             
-            # KROK 1: Próba wejścia na stronę. Jeśli serwer padł, tu wyrzuci PlaywrightTimeoutError
+            # wejscie na strone wyszukiwania
             await page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
-
+            
+            await fake_scroll(page, 1, shop_config["slow"]*2)
+            
             #zebranie listy tytułów za pomocą selektora klasy
             try:
-                # Ustawiamy krótszy timeout, bo strona już się załadowała. 
-                # Jeśli po 5 sekundach nie ma kafelków, zakładamy, że sklep zwrócił "Brak wyników".
+                # wyszukujemy kafelki wynikowe
                 await page.wait_for_selector(selector, timeout=2500)
                 elements = await page.locator(selector).all()
             except PlaywrightTimeoutError:
-                logging.info(f"  -> Strona wczytana, ale nie znaleziono produktów (Pusta lista).")
-                return None # Przerywamy całkowicie - nie ma sensu ponawiać "braku wyników"
+                logging.info(f"[{shop_name}][{product_name}]  -> Strona wczytana, ale nie znaleziono produktów (Pusta lista).")
+                return None 
             
             best_match_url = None
             best_match_title = ""
@@ -50,11 +52,11 @@ async def find_product_url(page: Page, shop_config: dict, product: dict, max_ret
 
                 required_words = product.get("required_words", [])
                 exclude_words = product.get("exclude_words", [])
-                target_name = product["name"]
+                target_name = product_name
                 target_name = target_name + " " + product["quantity"]
                 
                 #ustawienie wymagania pojemnosci
-                if not "quantity_button" in selectors:
+                if not "quantity_button" in selectors and product["quantity"] != "":
                     if not any(q.lower() in title_lower for q in possible_quantities) or \
                         any(s + q in title_lower for q in possible_quantities \
                         for s in [ '1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '.']):
@@ -79,7 +81,7 @@ async def find_product_url(page: Page, shop_config: dict, product: dict, max_ret
                     
             # formatowanie url
             if best_match_url:
-                logging.info(f"Najlepsze dopasowanie: '{best_match_title}' (Zgodność: {best_score}%)")
+                logging.info(f"[{shop_name}][{product_name}] Najlepsze dopasowanie: '{best_match_title}' (Zgodność: {best_score}%)")
                 
                 if not best_match_url.startswith("http"):
                     parsed_uri = urlparse(search_url)
@@ -88,20 +90,20 @@ async def find_product_url(page: Page, shop_config: dict, product: dict, max_ret
                     
                 return best_match_url
                 
-            loffing.error(f"Żaden wynik nie przeszedł walidacji dla: {product['name']}")
+            logging.info(f"[{shop_name}][{product_name}]Żaden wynik nie przeszedł walidacji dla: {product['name']}")
             return None
             
-        # Złapanie błędu z KROKU 1 (Strona wyszukiwarki w ogóle się nie załadowała / Błąd 500)
+        # złapanie nie wczytania strony 
         except PlaywrightTimeoutError:
-            logging.warning(f"[Timeout] Wyszukiwarka w sklepie długo nie odpowiada (Próba {attempt}/{max_retries}).")
+            logging.warning(f"[{shop_name}][{product_name}][Timeout] Wyszukiwarka w sklepie długo nie odpowiada (Próba {attempt}/{max_retries}).")
         except Exception as e:
-            logging.error(f"[Błąd] Nieoczekiwany problem przy wyszukiwaniu (Próba {attempt}/{max_retries}): {e}")
+            logging.error(f"[{shop_name}][{product_name}][Błąd] Nieoczekiwany problem przy wyszukiwaniu (Próba {attempt}/{max_retries}): {e}")
             
-        # Oczekiwanie przed kolejną próbą załadowania wyszukiwarki
+        # odczekanie i ponowienie proby wczytania
         if attempt < max_retries:
             wait_time = attempt * 2
-            logging.info(f"Ponawiam połączenie z wyszukiwarką za {wait_time}s...")
+            logging.info(f"[{shop_name}][{product_name}]Ponawiam połączenie z wyszukiwarką za {wait_time}s...")
             await asyncio.sleep(wait_time)
 
-    logging.error(f"[KRYTYCZNE] Wyszukiwarka dla zapytania '{product['name']}' jest całkowicie niedostępna po {max_retries} próbach.")
-    return None
+    logging.error(f"[{shop_name}][{product_name}][KRYTYCZNE] Wyszukiwarka dla zapytania '{product['name']}' jest całkowicie niedostępna po {max_retries} próbach.")
+    raise PlaywrightTimeoutError("Wyczerpano limit prób połączenia ze sklepem.")

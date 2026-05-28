@@ -207,6 +207,7 @@ test.py
 TODO
 
 config.py
-data/products_to_search.json
 
 data
+data/products_to_search.json
+config.py

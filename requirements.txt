@@ -13,3 +13,6 @@ soupsieve
 thefuzz
 typing_extensions
 urllib3            
+playwright_stealth
+aiohttp
+tqdm

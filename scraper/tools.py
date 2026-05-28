@@ -1,12 +1,12 @@
 import re
+import asyncio
+import random
+from playwright.async_api import Page
 
-#przyjmuje string z pojemnosccią i tworzy wszystkie potencjalne sposoby zapisania tej pojemnosci
+
 def generate_quantity_variants(quantity_str: str) -> list[str]:
-    """
-    Rozbija string ilościowy (np. '500ml', '0,5ha', '100m2') i generuje listę 
-    wszystkich dopuszczalnych zapisów w różnych jednostkach i formatach.
-    """
-    # 1. Zaktualizowany Regex: Pozwala na jednostki typu 'm2' lub 'm^2'
+    ''' przyjmuje string z wartoscia jedonstka i tworzy wszystkie potencjalne sposoby zapisania tej pojemnosci '''
+
     match = re.match(r'^\s*([\d.,\s]+?)\s*([a-zA-Z]+(?:\^?2)?)\s*$', quantity_str.lower())
     
     if not match:
@@ -53,7 +53,6 @@ def generate_quantity_variants(quantity_str: str) -> list[str]:
             if new_val.is_integer():
                 formatted_val = str(int(new_val))
             else:
-                # Ograniczamy do 4 miejsc po przecinku, żeby uniknąć ułamków typu 0.000100000001
                 formatted_val = f"{new_val:.4f}".rstrip('0').rstrip('.')
                 
             val_dot = formatted_val
@@ -82,12 +81,10 @@ def generate_quantity_variants(quantity_str: str) -> list[str]:
     return sorted(list(variants))
 
 
-#formatuje cenę zapisaną w różnych formatach 
+
 def parse_price(price_text: str) -> float | None:
-    """
-    Inteligentnie parsuje cenę, ignorując jednostki, skróty i kodowanie HTML.
-    Obsługuje: "1 599,99", "3,080.00", "918,00&nbsp;zł/szt.", "1.500,00 zł."
-    """
+    """ ormatuje string ceny zapisany w różnych formach """
+
     if not price_text:
         return None
         
@@ -119,3 +116,56 @@ def parse_price(price_text: str) -> float | None:
         return None
 
 
+
+async def fake_scroll(page: Page, max_scrolls: int = 10, delay_between: float = 0.5):
+    """wykonuje falszywy scroll na stronie Page"""
+    for _ in range(max_scrolls):
+        #scroll distance
+        scroll_distance = random.randint(100, 400)
+        scroll_distance2 = random.randint(100, 800)
+        
+        await asyncio.sleep(delay_between + random.uniform(0.2, 1.2))
+        
+        await page.evaluate(f"window.scrollBy(0, {scroll_distance2})")
+        
+        
+        
+        await asyncio.sleep(delay_between + random.uniform(0.1, 0.7))
+        # losuje kierunek
+        if random.random() > 0.1:
+            await page.evaluate(f"window.scrollBy(0, {scroll_distance})")
+        else:
+            await page.evaluate(f"window.scrollBy(0, -{scroll_distance})")
+        
+        # falszywe czekanie
+        await asyncio.sleep(delay_between + random.uniform(0.2, 1.1))
+        
+        
+async def fake_hover(page: Page, selector: str = None, duration: float = None):
+    """ najezdza myszka na stronie Page na element selector lub na losowe miejsce"""
+
+    if selector:
+        # znajdz selektor
+        element = await page.query_selector(selector)
+        
+        await asyncio.sleep(duration or random.uniform(0.2, 0.5))
+        if element:
+            box = await element.bounding_box()
+            if box:
+                # najedz na losowe miejsce 
+                x = box['x'] + random.uniform(10, box['width'] - 10)
+                y = box['y'] + random.uniform(10, box['height'] - 10)
+                await page.mouse.move(x, y)
+                
+                # pozostan
+                hover_time = duration or random.uniform(0.5, 2.5)
+                await asyncio.sleep(hover_time)
+                return True
+    else:
+        # najedz na losowe miejsce
+        viewport = await page.evaluate("({width: window.innerWidth, height: window.innerHeight})")
+        x = random.randint(50, viewport['width'] - 50)
+        y = random.randint(50, viewport['height'] - 50)
+        await page.mouse.move(x, y)
+        return True
+    return False
